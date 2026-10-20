@@ -19,8 +19,8 @@ margin = 0.05
 
 [jev]
 enabled = true
-model = "jev-1.13"            # verify against current TypeSafe docs
-base_url = "https://api.typesafe.ai"   # verify against current TypeSafe docs
+model = "jev-latest"          # moving alias; pin a versioned id once known
+base_url = "https://api.typesafe.ai"
 endpoint = "/v1/systemone"
 api_key_env = "TYPESAFE_API_KEY"
 accept = 0.80

@@ -44,7 +44,9 @@ class BandConfig:
 @dataclass
 class JevConfig:
     enabled: bool = True
-    model: str = "jev-1.13"  # direct-API id; verify against current TypeSafe docs
+    # Verified live 2026-10. "jev-1.13"/"jev-1.14" are rejected as unknown. "latest" is a
+    # moving alias: pin a versioned id once known, or answers can shift under a calibrated accept.
+    model: str = "jev-latest"
     # Endpoint and auth scheme are taken from the plan; verify against current TypeSafe docs.
     base_url: str = "https://api.typesafe.ai"
     endpoint: str = "/v1/systemone"

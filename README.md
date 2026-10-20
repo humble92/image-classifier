@@ -79,14 +79,16 @@ TYPESAFE_API_KEY=... pytest -m live   # one real Jev batch
 
 ## Known limitations / unverified assumptions
 
-- **The Jev API contract is only partly verified.** A live run confirmed that the
-  endpoint (`/v1/systemone`) and `Authorization: Bearer` auth get as far as model
-  validation, and that `jev-1.14` is not a valid model id. The default is now `jev-1.13`,
-  taken from a gateway listing rather than TypeSafe's docs. Override it with
-  `--jev-model`, `[jev] model`, or `TYPESAFE_MODEL` for the live test. The request
-  and response shapes (`answers.<qid>.{choice, confidence, probabilities}`,
-  `usage.input_tokens`) are still unverified; all of it lives in
-  `image_classifier/jev_judge.py`. Run `pytest -m live` before relying on Jev.
+- **The Jev API contract is verified by a live run** (`pytest -m live`, 2026-10): the
+  endpoint `/v1/systemone`, `Authorization: Bearer` auth, the request shape, and the
+  response shape `answers.<qid>.{choice, probabilities}` plus `usage.input_tokens`.
+  One request with 1 reference and 2 candidates used 1,465 input tokens.
+- **Model id:** only `jev-latest` was accepted; `jev-1.13` and `jev-1.14` return
+  `400 Unknown model`. `latest` is a moving alias, so a TypeSafe release can change
+  answers and invalidate a calibrated `jev.accept`. Pin a versioned id when you have
+  one (`--jev-model`, `[jev] model`, or `TYPESAFE_MODEL` for the live test).
+- Image input is still experimental on TypeSafe's side; rerun `pytest -m live` after
+  any upgrade or when Jev results look off.
 - On a 400/422 the judge drops the candidates named in the error and resends the rest.
   It bisects only when the error is about an image but names none. Any other rejection
   (unknown model, bad field) disables Jev for the run, so a config error costs one

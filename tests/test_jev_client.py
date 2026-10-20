@@ -54,7 +54,7 @@ def test_success_and_headers():
     assert req.headers["Authorization"] == "Bearer test-key"
     assert "TypeSafe-Danger-Zone-Long-Context" not in req.headers
     body = json.loads(req.content)
-    assert set(body["questions"]) == {"c_0", "c_1", "c_2"} and body["model"] == "jev-1.13"
+    assert set(body["questions"]) == {"c_0", "c_1", "c_2"} and body["model"] == "jev-latest"
 
     assert out["sha0"].decision == "ref_1" and out["sha0"].batch_id == "b0001"
     assert out["sha1"].decision == "none"
