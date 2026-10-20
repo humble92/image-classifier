@@ -15,7 +15,7 @@ Sort the images in an input directory into folders, one folder per reference ima
 The pipeline has two stages.
 
 1. **Local embeddings (every image).** DINOv2 embeds every image locally, and cosine similarity is computed against each reference. Clear matches and clear non-matches are decided here, at zero API cost.
-2. **Jev (borderline only).** Candidates whose similarity falls in an uncertain band go to TypeSafe Jev in **batched requests**. Each request carries the reference images **once** in shared `state`, plus a batch of candidates.
+2. **Jev (borderline only).** Candidates whose similarity falls in an uncertain band go to TypeSafe Jev. In this plan, a **batch** means **one request with multiple questions**, one question per borderline candidate. Each request carries the reference images **once** in shared `state`. Each candidate image is attached only to its own question.
 
 ## 2. Requirements
 
@@ -129,9 +129,12 @@ The defaults are placeholders until calibration (§6): `T_high = 0.70`, `T_low =
 
 ### Step 5: Jev batch judge
 
-This is the cost-critical design. **Reference images are sent once per request in shared `state`, never once per candidate.** The Images docs specify that an image in `state` is evaluated against every question in the request. An image placed in a question's `instructions` or `criteria`, by contrast, is duplicated for each question that uses it.
+This is the cost-critical design. A batch is **one request containing multiple questions**, one per borderline candidate. Jev answers the questions in a request in parallel, and they cannot see each other's answers.
 
-#### Request shape (one request per batch of K borderline candidates)
+- **References go in shared `state`, once per request, never once per candidate.** The Images docs specify that an image in `state` is evaluated against every question in the request.
+- **Each candidate image goes in its own question's `instructions`.** An image in `instructions` is sent once for each question that includes it. Each candidate belongs to exactly one question, so it is sent exactly once. A question therefore sees only the references plus its own candidate, never the other candidates in the batch.
+
+#### Request shape (one request, K questions, K = number of borderline candidates in the batch)
 
 ```jsonc
 // POST /v1/systemone, header TypeSafe-Danger-Zone-Images: true
@@ -143,34 +146,29 @@ This is the cost-critical design. **Reference images are sent once per request i
       "ref_1": { "name": "red_bike",   "image": "<img:ref_1>" },
       "ref_2": { "name": "blue_bike",  "image": "<img:ref_2>" }
       // ... up to ref_5
-    },
-    "candidates": {
-      "c_0": { "image": "<img:c_0>" },
-      "c_1": { "image": "<img:c_1>" }
-      // ... up to c_{K-1}
     }
   },
   "questions": {
     "c_0": {
       "type": "choice",
-      "instructions": "Which reference shows the very same individual object/subject as `candidates.c_0.image`? Same individual means identical identity (e.g. the same specific item, not merely the same model, brand, breed or category). Ignore differences in angle, lighting, background, crop and scale.",
+      "instructions": "Candidate photo: <img:c_0>\nWhich reference shows the very same individual object/subject as the candidate photo above? Same individual means identical identity (e.g. the same specific item, not merely the same model, brand, breed or category). Ignore differences in angle, lighting, background, crop and scale.",
       "criteria": {
         "ref_1": "Same individual as `references.ref_1.image`",
         "ref_2": "Same individual as `references.ref_2.image`",
         "none":  "Not the same individual as any reference (may be similar-looking or the same type)"
       }
     },
-    "c_1": { "...": "same shape, pointing at `candidates.c_1.image`" }
+    "c_1": { "...": "same shape, with <img:c_1> in its instructions" }
   },
   "assets": {
     "<img:ref_1>": { "type": "image", "format": "jpeg", "data_base64": "..." },
     "<img:c_0>":   { "type": "image", "format": "jpeg", "data_base64": "..." }
-    // every asset referenced exactly once, in state
+    // refs referenced once (in state); each candidate referenced once (in its own question)
   }
 }
 ```
 
-The criteria and instructions point at images **by state path** (backticked), not by asset placeholder. As a result, no image is duplicated across questions. Each image appears once in the payload. Prefer multipart upload over base64 for about 25% smaller bodies.
+Criteria point at the references **by state path** (backticked), not by asset placeholder, so the reference images are never duplicated per question. Each image therefore appears once in the expanded request. Prefer multipart upload over base64 for about 25% smaller bodies.
 
 #### Batch packing
 
@@ -200,7 +198,7 @@ Each answer returns `choice`, `confidence` and `probabilities`.
 #### Open questions to settle in the pilot (milestone M3)
 
 1. **Billing of shared state.** Confirm from `usage.input_tokens` that shared `state` is billed once per request and not once per question. If it is billed per question, batching saves payload size but not tokens, and K should shrink.
-2. **Cross-candidate interference.** Every question sees all K candidates in `state`. Compare accuracy at K = 1 against K = 8 against K = 16 on the same borderline set. If accuracy drops with K, lower the default K.
+2. **Image in `instructions` vs. `state`.** Candidates sit in their own question's `instructions`, so questions should not interfere with each other. Still, compare accuracy at K = 1 against K = 8 against K = 16 on the same borderline set to confirm that batching does not change answers. If it does, lower the default K.
 3. **Context limit.** Find the largest K that fits the context window at `max_side = 1024`. If the limit binds, either lower `max_side` or enable the long-context header.
 
 ### Step 6: Routing and report
@@ -243,7 +241,7 @@ The thresholds are the product: wrong values either flood Jev or misfile images.
 
 | Level | What |
 |---|---|
-| Unit | Banding rules at the boundaries; Jev payload builder (each asset referenced exactly once, references only in `state`, question paths valid); batch packer byte limits; preprocess outputs inside the 280–1568 px and pixel-count bounds; collision-safe copy |
+| Unit | Banding rules at the boundaries; Jev payload builder (each asset referenced exactly once, references only in `state`, each candidate only in its own question, question paths valid); batch packer byte limits; preprocess outputs inside the 280–1568 px and pixel-count bounds; collision-safe copy |
 | Contract | Jev client against recorded fixtures: success, 422 bisect, 429 retry, and malformed or missing answers |
 | Integration | A small fixture set (2 references, about 20 candidates including near-duplicates, same-type-different-identity and unrelated images) run end-to-end with Jev mocked |
 | Live (opt-in) | `pytest -m live` sends one real Jev batch and is skipped without `TYPESAFE_API_KEY` |
@@ -263,6 +261,6 @@ The thresholds are the product: wrong values either flood Jev or misfile images.
 |---|---|
 | Jev image support is experimental and its API may change | Jev isolated in `jev_judge.py`; `--no-jev` fallback; contract tests catch drift |
 | Hard negatives (identical-looking products, twins, same model of car) | Both stages may fail; route uncertain cases to `_review/` rather than guessing. Consider more reference photos per identity (future: several images per reference folder, averaged). |
-| Batch interference lowers Jev accuracy | Measured in M3; K tunable down to 1 |
+| Batching (multiple questions per request) changes Jev answers | Measured in M3; K tunable down to 1 |
 | One malformed image fails a whole batch | Pre-validation plus bisect on 4xx |
 | Only one reference photo per identity, with a pose very different from candidates | Flip augmentation now; multiple reference images per identity as a later extension |
