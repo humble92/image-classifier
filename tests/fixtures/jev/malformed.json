@@ -1,0 +1,8 @@
+{
+  "answers": {
+    "c_0": {"choice": "ref_9", "confidence": 0.9, "probabilities": {"ref_9": 0.9}},
+    "c_1": {"choice": "ref_1", "confidence": 0.9},
+    "c_2": "ref_1"
+  },
+  "usage": {"input_tokens": 1000}
+}

@@ -1,0 +1,35 @@
+# Copy to classifier.toml and pass with --config. Every value is optional.
+# Thresholds are placeholders until you run `image-classifier calibrate` on your own data.
+
+[scan]
+recursive = true
+
+[embed]
+model = "dinov2-base"        # or "siglip-base"
+patch_mean = false           # CLS + mean patch tokens; let calibration decide
+flip_refs = true
+batch_size = 16
+device = "auto"              # auto | cpu | cuda | mps
+cache_dir = ".cache/embeddings"
+
+[band]
+t_high = 0.70
+t_low = 0.45
+margin = 0.05
+
+[jev]
+enabled = true
+model = "jev-1.14"
+base_url = "https://api.typesafe.ai"   # verify against current TypeSafe docs
+endpoint = "/v1/systemone"
+api_key_env = "TYPESAFE_API_KEY"
+accept = 0.80
+max_batch = 16
+max_request_mib = 24
+max_side = 1024
+jpeg_quality = 90
+max_requests = 50
+max_retries = 3
+timeout_s = 120
+long_context = false
+usd_per_mtok_input = 0.042
