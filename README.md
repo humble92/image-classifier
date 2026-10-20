@@ -42,7 +42,7 @@ previous run created (tracked in `.image-classifier.json`).
 
 Other options: `--config classifier.toml` (see `classifier.example.toml`), `--model
 siglip-base`, `--patch-mean`, `--t-high/--t-low/--margin`, `--jev-accept`,
-`--jev-batch`, `--no-recursive`, `-v`.
+`--jev-batch`, `--jev-model`, `--no-recursive`, `-v`.
 
 On Windows, write paths in `classifier.toml` with forward slashes or single quotes
 (`cache_dir = 'C:\cache'`). In a double-quoted TOML string, `\U`, `\t` and so on
@@ -79,11 +79,18 @@ TYPESAFE_API_KEY=... pytest -m live   # one real Jev batch
 
 ## Known limitations / unverified assumptions
 
-- **The Jev API contract is assumed, not verified.** The endpoint (`/v1/systemone`),
-  the `Authorization: Bearer` auth, the request shape and the response shape
-  (`answers.<qid>.{choice, confidence, probabilities}`, `usage.input_tokens`) follow
-  the plan. They have not been checked against live docs, and all of them live in
+- **The Jev API contract is only partly verified.** A live run confirmed that the
+  endpoint (`/v1/systemone`) and `Authorization: Bearer` auth get as far as model
+  validation, and that `jev-1.14` is not a valid model id. The default is now `jev-1.13`,
+  taken from a gateway listing rather than TypeSafe's docs. Override it with
+  `--jev-model`, `[jev] model`, or `TYPESAFE_MODEL` for the live test. The request
+  and response shapes (`answers.<qid>.{choice, confidence, probabilities}`,
+  `usage.input_tokens`) are still unverified; all of it lives in
   `image_classifier/jev_judge.py`. Run `pytest -m live` before relying on Jev.
+- On a 400/422 the judge drops the candidates named in the error and resends the rest.
+  It bisects only when the error is about an image but names none. Any other rejection
+  (unknown model, bad field) disables Jev for the run, so a config error costs one
+  request instead of one per bisection step.
 - Payloads are base64 JSON. The plan's preferred multipart upload is not implemented,
   because its wire format is undocumented here. Expect bodies about 33% larger than
   the raw JPEGs.

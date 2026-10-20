@@ -44,7 +44,7 @@ class BandConfig:
 @dataclass
 class JevConfig:
     enabled: bool = True
-    model: str = "jev-1.14"
+    model: str = "jev-1.13"  # direct-API id; verify against current TypeSafe docs
     # Endpoint and auth scheme are taken from the plan; verify against current TypeSafe docs.
     base_url: str = "https://api.typesafe.ai"
     endpoint: str = "/v1/systemone"

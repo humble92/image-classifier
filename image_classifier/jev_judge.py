@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import random
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -38,6 +39,10 @@ QUESTION = (
     "Same individual means identical identity (e.g. the same specific item, not merely the same "
     "model, brand, breed or category). Ignore differences in angle, lighting, background, crop and scale."
 )
+
+# How a 400/422 body points at a specific candidate, or at images in general.
+BLAMED_QID = re.compile(r"(?:<img:|questions\.)(c_\d+)\b")
+IMAGE_ERROR = re.compile(r"image|asset|<img:", re.IGNORECASE)
 
 # Conservative JSON framing allowances used by the packer.
 BASE_OVERHEAD_BYTES = 8 * 1024
@@ -305,6 +310,43 @@ class JevJudge:
         for item in batch:
             out[item.item_id] = JevOutcome(REVIEW, batch_id=batch_id, error=error)
 
+    def _handle_rejection(
+        self,
+        batch: list[JevItem],
+        qmap: dict[str, str],
+        exc: JevValidationError,
+        batch_id: str,
+        out: dict[str, JevOutcome],
+    ) -> None:
+        """Decide what a 400/422 blames, so a request-level error does not trigger a bisect.
+
+        1. The error names specific candidates (``<img:c_3>`` / ``questions.c_3``): review those,
+           resend the rest.
+        2. The error is about an image but names none: bisect to isolate it.
+        3. Anything else (unknown model, bad field, ...) is request-level: every request
+           would fail the same way, so disable Jev for the run instead of spending more requests.
+        """
+        blamed_qids = {q for q in BLAMED_QID.findall(exc.body) if q in qmap}
+        if blamed_qids:
+            blamed = {qmap[q] for q in blamed_qids}
+            for item in batch:
+                if item.item_id in blamed:
+                    out[item.item_id] = JevOutcome(REVIEW, batch_id=batch_id, error=f"jev rejected: {exc}")
+            rest = [item for item in batch if item.item_id not in blamed]
+            if rest:
+                self._judge(rest, out)
+            return
+        if IMAGE_ERROR.search(exc.body):
+            if len(batch) == 1:
+                self._review_all(batch, out, f"jev rejected: {exc}", batch_id)
+                return
+            mid = len(batch) // 2
+            self._judge(batch[:mid], out)
+            self._judge(batch[mid:], out)
+            return
+        self.disabled_reason = f"request rejected: {exc}"
+        self._review_all(batch, out, f"jev rejected: {exc}", batch_id)
+
     def _judge(self, batch: list[JevItem], out: dict[str, JevOutcome]) -> None:
         if self.disabled_reason:
             self._review_all(batch, out, f"jev disabled: {self.disabled_reason}")
@@ -324,12 +366,7 @@ class JevJudge:
         except JevValidationError as exc:
             record.status = "validation_error"
             log.error("Jev batch %s rejected (%s): %s", batch_id, exc.status, exc.body[:2000])
-            if len(batch) == 1:
-                self._review_all(batch, out, f"jev rejected: {exc}", batch_id)
-                return
-            mid = len(batch) // 2
-            self._judge(batch[:mid], out)
-            self._judge(batch[mid:], out)
+            self._handle_rejection(batch, qmap, exc, batch_id, out)
             return
         except JevTransientError as exc:
             record.status = "transient_error"

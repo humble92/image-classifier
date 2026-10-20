@@ -1,4 +1,7 @@
-"""Opt-in: ``TYPESAFE_API_KEY=... pytest -m live``. Sends one real two-question Jev batch."""
+"""Opt-in: ``TYPESAFE_API_KEY=... pytest -m live``. Sends one real two-question Jev batch.
+
+Set ``TYPESAFE_MODEL`` to try a model id other than the configured default.
+"""
 
 import os
 
@@ -22,6 +25,7 @@ def test_one_real_batch(tmp_path):
         paths[name] = tmp_path / f"{name}.png"
         im.save(paths[name])
     cfg = JevConfig()
+    cfg.model = os.environ.get("TYPESAFE_MODEL", cfg.model)
     judge = JevJudge(
         JevClient(cfg, os.environ["TYPESAFE_API_KEY"]), [JevRef("ref_1", "pattern_a", jev_jpeg(paths["ref"]))], cfg
     )

@@ -54,7 +54,7 @@ def test_success_and_headers():
     assert req.headers["Authorization"] == "Bearer test-key"
     assert "TypeSafe-Danger-Zone-Long-Context" not in req.headers
     body = json.loads(req.content)
-    assert set(body["questions"]) == {"c_0", "c_1", "c_2"} and body["model"] == "jev-1.14"
+    assert set(body["questions"]) == {"c_0", "c_1", "c_2"} and body["model"] == "jev-1.13"
 
     assert out["sha0"].decision == "ref_1" and out["sha0"].batch_id == "b0001"
     assert out["sha1"].decision == "none"
@@ -71,30 +71,78 @@ def test_long_context_header():
     assert seen[0].headers["TypeSafe-Danger-Zone-Long-Context"] == "true"
 
 
-def test_422_bisects_to_bad_image():
-    bad = b"Z" * 10
-    bad_b64 = base64.b64encode(bad).decode()
-    calls = []
+BAD = b"Z" * 10
+BAD_B64 = base64.b64encode(BAD).decode()
+
+
+def _bad_image_handler(calls, error_for):
+    """Rejects any request containing BAD with error_for(qid_of_bad); answers 'none' otherwise."""
 
     def handler(req):
         body = json.loads(req.content)
         calls.append(len(body["questions"]))
-        if any(a["data_base64"] == bad_b64 for a in body["assets"].values()):
-            return httpx.Response(422, json=fixture("error_422.json"))
+        for ph, a in body["assets"].items():
+            if a["data_base64"] == BAD_B64:
+                return httpx.Response(422, json=error_for(ph[len("<img:") : -1]))
         answers = {
             q: {"choice": "none", "confidence": 0.9, "probabilities": {"ref_1": 0.05, "ref_2": 0.05, "none": 0.9}}
             for q in body["questions"]
         }
         return httpx.Response(200, json={"answers": answers, "usage": {"input_tokens": 10}})
 
-    its = items(4)
-    its[2] = JevItem("bad", bad)
-    judge, _ = make(handler)
+    return handler
+
+
+def _with_bad(n=4, at=2):
+    its = items(n)
+    its[at] = JevItem("bad", BAD)
+    return its
+
+
+def test_422_naming_candidate_drops_it_and_resends_rest():
+    calls = []
+    template = fixture("error_422.json")  # "assets.<img:c_1>: image width ..."
+
+    def error_for(qid):
+        msg = template["error"]["message"].replace("<img:c_1>", f"<img:{qid}>")
+        return {"error": {**template["error"], "message": msg}}
+
+    judge, _ = make(_bad_image_handler(calls, error_for))
+    its = _with_bad()
     out = judge.run(its)
     assert out["bad"].decision == REVIEW and "rejected" in out["bad"].error
     assert all(out[i.item_id].decision == "none" for i in its if i.item_id != "bad")
+    assert calls == [4, 3]  # no bisect: the named image is dropped, the rest resent once
+    assert judge.requests_made == 2
+
+
+def test_422_image_error_without_name_bisects():
+    calls = []
+    judge, _ = make(_bad_image_handler(calls, lambda qid: fixture("error_422_image.json")))
+    its = _with_bad()
+    out = judge.run(its)
+    assert out["bad"].decision == REVIEW
+    assert all(out[i.item_id].decision == "none" for i in its if i.item_id != "bad")
     assert calls == [4, 2, 2, 1, 1]  # full, ok half, bad half, then its two singles
     assert judge.requests_made == 5
+
+
+def test_400_request_level_error_does_not_bisect():
+    """Recorded from a live run: an unknown model fails every request, so stop after one."""
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(400, json=fixture("error_400_unknown_model.json"))
+
+    judge, _ = make(handler, max_batch=2)
+    out = judge.run(items(5))  # 3 batches
+    assert len(calls) == 1 and judge.requests_made == 1
+    assert "Unknown model" in judge.disabled_reason
+    assert all(o.decision == REVIEW for o in out.values())
+    assert sum(o.error.startswith("jev rejected") for o in out.values()) == 2  # the batch that was sent
+    assert sum(o.error.startswith("jev disabled") for o in out.values()) == 3  # the batches never sent
+    assert all("Unknown model" in o.error for o in out.values())
 
 
 def test_429_retries_then_succeeds():

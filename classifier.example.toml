@@ -19,7 +19,7 @@ margin = 0.05
 
 [jev]
 enabled = true
-model = "jev-1.14"
+model = "jev-1.13"            # verify against current TypeSafe docs
 base_url = "https://api.typesafe.ai"   # verify against current TypeSafe docs
 endpoint = "/v1/systemone"
 api_key_env = "TYPESAFE_API_KEY"
