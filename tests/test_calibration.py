@@ -48,7 +48,7 @@ def test_cli_calibrate(tmp_path, fake_embedder, monkeypatch):
         render(A, noise=5, seed=i).save(lab / "alpha" / f"{i}.png")
         render(pattern(50 + i)).save(lab / "none" / f"{i}.png")
     conf = tmp_path / "c.toml"
-    conf.write_text(f'[embed]\nflip_refs = false\ncache_dir = "{tmp_path / "cache"}"\n')
+    conf.write_text(f'[embed]\nflip_refs = false\ncache_dir = "{(tmp_path / "cache").as_posix()}"\n')
     r = CliRunner().invoke(cli.app, ["calibrate", str(lab), "--refs", str(refs), "--config", str(conf)])
     assert r.exit_code == 0, r.output
     assert "Labeled images: 10 (5 matches, 5 none)" in r.output

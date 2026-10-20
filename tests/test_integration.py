@@ -149,7 +149,7 @@ def test_cli_classify(dataset, cfg, fake_embedder, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "embedder_factory", lambda c: fake_embedder)
     conf = tmp_path / "c.toml"
     conf.write_text(
-        f'[embed]\nflip_refs = false\ncache_dir = "{cfg.embed.cache_dir}"\n[band]\nt_high = 0.9\nt_low = 0.4\n'
+        f'[embed]\nflip_refs = false\ncache_dir = "{Path(cfg.embed.cache_dir).as_posix()}"\n[band]\nt_high = 0.9\nt_low = 0.4\n'
     )
     runner = CliRunner()
     args = ["classify", str(dataset["input"]), "--refs", str(dataset["refs"]), "--out", str(dataset["out"])]
@@ -171,7 +171,7 @@ def test_cli_classify(dataset, cfg, fake_embedder, monkeypatch, tmp_path):
 def test_cli_refs_as_files(dataset, cfg, fake_embedder, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "embedder_factory", lambda c: fake_embedder)
     conf = tmp_path / "c.toml"
-    conf.write_text(f'[embed]\nflip_refs = false\ncache_dir = "{cfg.embed.cache_dir}"\n')
+    conf.write_text(f'[embed]\nflip_refs = false\ncache_dir = "{Path(cfg.embed.cache_dir).as_posix()}"\n')
     r = CliRunner().invoke(
         cli.app,
         [

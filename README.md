@@ -44,6 +44,10 @@ Other options: `--config classifier.toml` (see `classifier.example.toml`), `--mo
 siglip-base`, `--patch-mean`, `--t-high/--t-low/--margin`, `--jev-accept`,
 `--jev-batch`, `--no-recursive`, `-v`.
 
+On Windows, write paths in `classifier.toml` with forward slashes or single quotes
+(`cache_dir = 'C:\cache'`). In a double-quoted TOML string, `\U`, `\t` and so on
+are escape sequences, so `"C:\Users\..."` fails to parse.
+
 Embeddings are cached in `.cache/embeddings/<model>/<sha256>.npy`, so changing
 thresholds and rerunning costs no inference.
 

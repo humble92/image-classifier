@@ -34,7 +34,7 @@ def load_labeled(labeled_dir: Path, refs: list[Reference]):
     by_name = {r.name: i for i, r in enumerate(refs)}
     files, labels = [], []
     unknown = []
-    for sub in sorted(p for p in labeled_dir.iterdir() if p.is_dir()):
+    for sub in sorted((p for p in labeled_dir.iterdir() if p.is_dir()), key=lambda p: p.as_posix()):
         if sub.name in NONE_LABELS:
             label = -1
         elif sub.name in by_name:

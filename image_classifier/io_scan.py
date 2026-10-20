@@ -65,7 +65,10 @@ def check_readable(path: Path) -> str | None:
 
 def _iter_image_paths(root: Path, recursive: bool) -> list[Path]:
     it = root.rglob("*") if recursive else root.iterdir()
-    return sorted(p for p in it if p.is_file() and p.suffix.lower() in IMAGE_EXTS and not p.name.startswith("."))
+    paths = (p for p in it if p.is_file() and p.suffix.lower() in IMAGE_EXTS and not p.name.startswith("."))
+    # Sort on the string, not the Path: WindowsPath compares case-insensitively, which
+    # would give the same reference folder different ref_1/ref_2 numbering per OS.
+    return sorted(paths, key=lambda p: p.as_posix())
 
 
 def scan_inputs(root: Path, recursive: bool = True, exclude: Path | None = None) -> tuple[list[ImageFile], list[ScanError]]:
