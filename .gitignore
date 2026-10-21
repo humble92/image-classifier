@@ -5,3 +5,8 @@ __pycache__/
 .venv/
 classifier.toml
 out/
+photos_candidates/
+photos/
+refs/
+sorted/
+labeled/

@@ -35,6 +35,27 @@ export TYPESAFE_API_KEY=...
 image-classifier classify photos/ --refs refs/ --out sorted/ --max-jev-requests 20
 ```
 
+`classify` calls Jev only for BORDERLINE images. To send one candidate and the
+references directly, skipping embeddings and banding:
+
+```bash
+export TYPESAFE_API_KEY=...
+image-classifier jev photos/file.jpg --refs refs/ --config classifier.toml
+```
+
+On Windows, quote a path that contains spaces and leave off the trailing
+backslash. A trailing `\` escapes the closing quote, so the next argument is
+swallowed into the path:
+
+```powershell
+image-classifier jev 'C:\Users\daniel.hwang\Work\image-classifier\photos\file.jpg' --refs refs --config .\classifier.toml
+```
+
+This makes one real Jev request and copies nothing. It prints the model id,
+request count, input tokens, Jev's `Choice`, and a `Decision`. `Decision` is
+that choice when its probability is at least `jev.accept` (default 0.80);
+otherwise it is `review`. Optional flags: `--jev-model`, `--jev-accept`.
+
 `--refs` takes a directory or files and is repeatable (`--refs a.jpg --refs b.jpg`),
 1–5 images in total. Folder names come from the reference filename stems. Rerunning
 into the same output needs `--overwrite`, which deletes only the folders a

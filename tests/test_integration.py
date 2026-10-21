@@ -168,6 +168,53 @@ def test_cli_classify(dataset, cfg, fake_embedder, monkeypatch, tmp_path):
     assert r.exit_code == 2  # t_low > t_high rejected by config validation
 
 
+def test_cli_jev_one_file(dataset, monkeypatch):
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(json.loads(req.content))
+        return httpx.Response(
+            200,
+            json={
+                "answers": {
+                    "c_0": {
+                        "choice": "ref_1",
+                        "confidence": 0.91,
+                        "probabilities": {"ref_1": 0.91, "ref_2": 0.05, "none": 0.04},
+                    }
+                },
+                "usage": {"input_tokens": 100},
+            },
+        )
+
+    def factory(cfg, api_key):
+        return JevClient(cfg, api_key, http=httpx.Client(transport=httpx.MockTransport(handler)))
+
+    def refuse_embedder(cfg):
+        raise AssertionError("embedder loaded")
+
+    monkeypatch.setattr(cli, "jev_client_factory", factory)
+    monkeypatch.setattr(cli, "embedder_factory", refuse_embedder)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
+    image = dataset["input"] / "a_dup0.jpg"
+    r = CliRunner().invoke(cli.app, ["jev", str(image), "--refs", str(dataset["refs"])])
+    assert r.exit_code == 0, r.output
+    assert "Choice: ref_1" in r.output
+    assert "Decision: ref_1" in r.output
+    assert "Requests: 1" in r.output
+    assert "Input tokens: 100" in r.output
+    assert set(seen[0]["questions"]) == {"c_0"}
+    assert set(seen[0]["state"]["references"]) == {"ref_1", "ref_2"}
+
+
+def test_cli_jev_missing_api_key(dataset, monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    image = dataset["input"] / "a_dup0.jpg"
+    r = CliRunner().invoke(cli.app, ["jev", str(image), "--refs", str(dataset["refs"])])
+    assert r.exit_code == 2
+    assert "TYPESAFE_API_KEY" in r.output
+
+
 def test_cli_refs_as_files(dataset, cfg, fake_embedder, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "embedder_factory", lambda c: fake_embedder)
     conf = tmp_path / "c.toml"
