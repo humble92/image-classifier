@@ -1,0 +1,12 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.cache/
+.venv/
+classifier.toml
+out/
+photos_candidates/
+photos/
+refs/
+sorted/
+labeled/

@@ -1,0 +1,8 @@
+{
+  "answers": {
+    "c_0": {"choice": "ref_1", "confidence": 0.93, "probabilities": {"ref_1": 0.93, "ref_2": 0.04, "none": 0.03}},
+    "c_1": {"choice": "none", "confidence": 0.88, "probabilities": {"ref_1": 0.07, "ref_2": 0.05, "none": 0.88}},
+    "c_2": {"choice": "ref_2", "confidence": 0.55, "probabilities": {"ref_1": 0.10, "ref_2": 0.55, "none": 0.35}}
+  },
+  "usage": {"input_tokens": 4321}
+}
